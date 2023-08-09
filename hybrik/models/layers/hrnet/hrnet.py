@@ -14,6 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import yaml
 from easydict import EasyDict as edict
+import pdb
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -249,7 +250,7 @@ class HighResolutionModule(nn.Module):
             return [self.branches[0](x[0])]
 
         for i in range(self.num_branches):
-            x[i] = self.branches[i](x[i])
+            x[i] = self.branches[i](x[i]) # xxxx8888
 
         x_fuse = []
 

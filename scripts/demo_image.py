@@ -14,6 +14,7 @@ from hybrik.utils.vis import get_one_box
 from torchvision import transforms as T
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
 from tqdm import tqdm
+import pdb
 
 det_transform = T.Compose([T.ToTensor()])
 
@@ -45,13 +46,16 @@ parser.add_argument('--out-dir',
 opt = parser.parse_args()
 
 
-# cfg_file = 'configs/256x192_adam_lr1e-3-res34_smpl_3d_cam_2x_mix_w_pw3d.yaml'
-# CKPT = './pretrained_w_cam.pth'
+
 cfg_file = 'configs/256x192_adam_lr1e-3-hrw48_cam_2x_w_pw3d_3dhp.yaml'
 CKPT = './pretrained_models/hybrik_hrnet.pth'
+# cfg_file = 'configs/smplx/256x192_hrnet_smplx_kid.yaml'
+# CKPT = './pretrained_models/hybrikx_hrnet.pth'
+
+
 cfg = update_config(cfg_file)
 
-bbox_3d_shape = getattr(cfg.MODEL, 'BBOX_3D_SHAPE', (2000, 2000, 2000))
+bbox_3d_shape = getattr(cfg.MODEL, 'BBOX_3D_SHAPE', (2000, 2000, 2000)) # ==> [2200, 2200, 2200]
 bbox_3d_shape = [item * 1e-3 for item in bbox_3d_shape]
 dummpy_set = edict({
     'joint_pairs_17': None,
@@ -61,24 +65,32 @@ dummpy_set = edict({
 })
 
 transformation = SimpleTransform3DSMPLCam(
-    dummpy_set, scale_factor=cfg.DATASET.SCALE_FACTOR,
-    color_factor=cfg.DATASET.COLOR_FACTOR,
-    occlusion=cfg.DATASET.OCCLUSION,
-    input_size=cfg.MODEL.IMAGE_SIZE,
-    output_size=cfg.MODEL.HEATMAP_SIZE,
-    depth_dim=cfg.MODEL.EXTRA.DEPTH_DIM,
-    bbox_3d_shape=bbox_3d_shape,
-    rot=cfg.DATASET.ROT_FACTOR, sigma=cfg.MODEL.EXTRA.SIGMA,
+    dummpy_set, 
+    scale_factor=cfg.DATASET.SCALE_FACTOR, # 0.3
+    color_factor=cfg.DATASET.COLOR_FACTOR, # 0.2
+    occlusion=cfg.DATASET.OCCLUSION, # True
+    input_size=cfg.MODEL.IMAGE_SIZE, # [256, 256]
+    output_size=cfg.MODEL.HEATMAP_SIZE, # [64, 64]
+    depth_dim=cfg.MODEL.EXTRA.DEPTH_DIM, # 64
+    bbox_3d_shape=bbox_3d_shape, # [2.2, 2.2, 2.2]
+    rot=cfg.DATASET.ROT_FACTOR, # 30
+    sigma=cfg.MODEL.EXTRA.SIGMA, # 2
     train=False, add_dpg=False,
-    loss_type=cfg.LOSS['TYPE'])
+    loss_type=cfg.LOSS['TYPE']) # cfg.LOSS['TYPE'] -- 'LaplaceLossDimSMPLCam'
+
 
 det_model = fasterrcnn_resnet50_fpn(pretrained=True)
+# det_model -- FasterRCNN()
+# torch.jit.script(det_model) ==> OK
 
 hybrik_model = builder.build_sppe(cfg.MODEL)
+# hybrik_model -- HRNetSMPLCam()
+
+# CKPT -- './pretrained_models/hybrik_hrnet.pth'
 
 print(f'Loading model from {CKPT}...')
 save_dict = torch.load(CKPT, map_location='cpu')
-if type(save_dict) == dict:
+if type(save_dict) == dict: # False
     model_dict = save_dict['model']
     hybrik_model.load_state_dict(model_dict)
 else:
@@ -88,9 +100,11 @@ det_model.cuda(opt.gpu)
 hybrik_model.cuda(opt.gpu)
 det_model.eval()
 hybrik_model.eval()
+#torch.jit.script(hybrik_model) ==> Errors !!!
+
 
 files = os.listdir(opt.img_dir)
-smpl_faces = torch.from_numpy(hybrik_model.smpl.faces.astype(np.int32))
+smpl_faces = torch.from_numpy(hybrik_model.smpl.faces.astype(np.int32)) # size() -- [13776, 3]
 
 if not os.path.exists(opt.out_dir):
     os.makedirs(opt.out_dir)
@@ -107,24 +121,42 @@ for file in tqdm(files):
         basename = os.path.basename(img_path)
 
         # Run Detection
+        # image_path='examples/000000581667.jpg'
         input_image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
         det_input = det_transform(input_image).to(opt.gpu)
         det_output = det_model([det_input])[0]
-
         tight_bbox = get_one_box(det_output)  # xyxy
+
+        # (Pdb) for k, v in det_output.items(): print(k, v)
+        # boxes tensor([
+        #         [ 69.8886,  18.4552, 264.3998, 372.8214],
+        #         [ 54.3510, 355.7674, 153.6232, 398.1135]], device='cuda:0')
+        # labels tensor([ 1, 41], device='cuda:0')
+        # scores tensor([0.9995, 0.9987], device='cuda:0', grad_fn=<IndexBackward0>)
+        # (Pdb) tight_bbox
+        # [69.88863372802734, 18.455211639404297, 264.3997802734375, 372.8213806152344]
 
         # Run HybrIK
         # bbox: [x1, y1, x2, y2]
         pose_input, bbox, img_center = transformation.test_transform(
             input_image, tight_bbox)
         pose_input = pose_input.to(opt.gpu)[None, :, :, :]
+
+        # pose_input.size() -- [1, 3, 256, 256]
+        # bbox -- [-54.33465576171875, -25.840576171875, 388.6230773925781, 417.1171569824219]
+        # img_center -- array([320. , 214.5])
+
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         pose_output = hybrik_model(
             pose_input, flip_test=True,
-            bboxes=torch.from_numpy(np.array(bbox)).to(pose_input.device).unsqueeze(0).float(),
-            img_center=torch.from_numpy(img_center).to(pose_input.device).unsqueeze(0).float()
+            bboxes=torch.from_numpy(np.array(bbox)).to(pose_input.device).unsqueeze(0).float(), # size() -- [1, 4]
+            img_center=torch.from_numpy(img_center).to(pose_input.device).unsqueeze(0).float() # size() -- [1, 2]
         )
-        uv_29 = pose_output.pred_uvd_jts.reshape(29, 3)[:, :2]
-        transl = pose_output.transl.detach()
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        uv_29 = pose_output.pred_uvd_jts.reshape(29, 3)[:, :2] # size() -- [29, 2]
+        transl = pose_output.transl.detach() # size() -- [1, 3]
+
 
         # Visualization
         image = input_image.copy()
@@ -135,13 +167,17 @@ for file in tqdm(files):
 
         vertices = pose_output.pred_vertices.detach()
 
-        verts_batch = vertices
-        transl_batch = transl
+        verts_batch = vertices # size() -- [1, 6890, 3]
+        transl_batch = transl # size() -- [1, 3]
 
         color_batch = render_mesh(
-            vertices=verts_batch, faces=smpl_faces,
+            vertices=verts_batch, # size() -- [1, 6890, 3]
+            faces=smpl_faces, # size() -- [13776, 3]
             translation=transl_batch,
-            focal_length=focal, height=image.shape[0], width=image.shape[1])
+            focal_length=focal, # 1730.3036451339722
+            height=image.shape[0],
+            width=image.shape[1])
+        # color_batch.size() -- [1, 429, 640, 4]
 
         valid_mask_batch = (color_batch[:, :, :, [-1]] > 0)
         image_vis_batch = color_batch[:, :, :, :3] * valid_mask_batch

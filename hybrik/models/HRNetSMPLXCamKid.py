@@ -61,7 +61,7 @@ class HRNetSMPLXCamKid(nn.Module):
         self.height_dim = kwargs['HEATMAP_SIZE'][0]
         self.width_dim = kwargs['HEATMAP_SIZE'][1]
         self.smpl_dtype = torch.float32
-        self.use_kid = kwargs['EXTRA']['USE_KID']
+        # self.use_kid = kwargs['EXTRA']['USE_KID']
 
         self.preact = get_hrnet25d(
             kwargs['HRNET_TYPE'], num_joints=71,

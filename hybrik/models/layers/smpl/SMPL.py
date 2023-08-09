@@ -53,6 +53,19 @@ class SMPL_layer(nn.Module):
         'head', 'left_middle', 'right_middle',  # 26
         'left_bigtoe', 'right_bigtoe'           # 28
     ]
+    # 骨盆，左髋
+    # 脊柱1，左膝
+    # 脊柱2，左脚踝
+    # 自旋3，左脚
+    # 左领颈
+    # 颌
+    # 左肩
+    # 左肘
+    # 左手腕
+    # 左手拇指
+    # 头部，左中，右中
+    # 左大脚趾
+    
     LEAF_NAMES = [
         'head', 'left_middle', 'right_middle', 'left_bigtoe', 'right_bigtoe'
     ]
@@ -136,9 +149,7 @@ class SMPL_layer(nn.Module):
         if parents.shape[0] > self.num_joints:
             parents = parents[:24]
 
-        self.register_buffer(
-            'children_map',
-            self._parents_to_children(parents))
+        self.register_buffer('children_map', self._parents_to_children(parents))
         # (24,)
         self.register_buffer('parents', parents)
 

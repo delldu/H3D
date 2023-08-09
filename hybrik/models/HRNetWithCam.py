@@ -8,7 +8,7 @@ from torch.nn import functional as F
 from .builder import SPPE
 from .layers.smpl.SMPL import SMPL_layer
 from .layers.hrnet.hrnet import get_hrnet
-
+import pdb
 
 def flip(x):
     assert (x.dim() == 3 or x.dim() == 4)
@@ -54,14 +54,24 @@ def norm_heatmap(norm_type, heatmap, tau=5, sample_num=1):
 class HRNetSMPLCam(nn.Module):
     def __init__(self, norm_layer=nn.BatchNorm2d, **kwargs):
         super(HRNetSMPLCam, self).__init__()
+        # norm_layer = <class 'torch.nn.modules.batchnorm.BatchNorm2d'>
+        # kwargs = {'HR_PRETRAINED': './pose_hrnet_w48_256x192.pth', 'PRETRAINED': '', 
+        #     'TRY_LOAD': '', 'RESUME': '', 'FOCAL_LENGTH': 1000, 
+        #     'IMAGE_SIZE': [256, 256], 'HEATMAP_SIZE': [64, 64], 
+        #     'NUM_JOINTS': 29, 'HRNET_TYPE': 48, 
+        #     'EXTRA': {'SIGMA': 2, 'BACKBONE': 'resnet', 'CROP': 'padding', 'AUGMENT': 'none', 
+        #             'PRESET': 'simple_smpl_3d_cam', 'DEPTH_DIM': 64}, 
+        #     'POST': {'NORM_TYPE': 'softmax'}, 'BBOX_3D_SHAPE': [2200, 2200, 2200]}
+
+
         self._norm_layer = norm_layer
-        self.num_joints = kwargs['NUM_JOINTS']
-        self.norm_type = kwargs['POST']['NORM_TYPE']
-        self.depth_dim = kwargs['EXTRA']['DEPTH_DIM']
-        self.height_dim = kwargs['HEATMAP_SIZE'][0]
-        self.width_dim = kwargs['HEATMAP_SIZE'][1]
+        self.num_joints = kwargs['NUM_JOINTS'] # 29 ?
+        self.norm_type = kwargs['POST']['NORM_TYPE'] # 'softmax'
+        self.depth_dim = kwargs['EXTRA']['DEPTH_DIM'] # 64
+        self.height_dim = kwargs['HEATMAP_SIZE'][0] # 64
+        self.width_dim = kwargs['HEATMAP_SIZE'][1] # 64
         self.smpl_dtype = torch.float32
-        self.pretrain_hrnet = kwargs['HR_PRETRAINED']
+        self.pretrain_hrnet = kwargs['HR_PRETRAINED'] # './pose_hrnet_w48_256x192.pth'
 
         self.preact = get_hrnet(kwargs['HRNET_TYPE'], num_joints=self.num_joints,
                                 depth_dim=self.depth_dim,
@@ -111,6 +121,7 @@ class HRNetSMPLCam(nn.Module):
         self.bbox_3d_shape = torch.tensor(bbox_3d_shape).float()
         self.depth_factor = self.bbox_3d_shape[2] * 1e-3
         self.input_size = 256.0
+        # pdb.set_trace()
 
     def _initialize(self):
         self.preact.init_weights(self.pretrain_hrnet)

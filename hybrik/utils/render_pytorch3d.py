@@ -3,7 +3,7 @@ import pytorch3d
 import pytorch3d.renderer
 import torch
 from scipy.spatial.transform import Rotation
-
+import pdb
 
 def render_mesh(vertices, faces, translation, focal_length, height, width, device=None):
     ''' Render the mesh under camera coordinates
@@ -36,6 +36,7 @@ def render_mesh(vertices, faces, translation, focal_length, height, width, devic
     verts_rgb = torch.ones_like(vertices)  # (B, V, 3)
     textures = pytorch3d.renderer.TexturesVertex(verts_features=verts_rgb)
     mesh = pytorch3d.structures.Meshes(verts=vertices, faces=faces, textures=textures)
+    # pdb.set_trace() # how save mesh ?
 
     # Initialize a camera.
     cameras = pytorch3d.renderer.PerspectiveCameras(
@@ -46,7 +47,6 @@ def render_mesh(vertices, faces, translation, focal_length, height, width, devic
     # Define the settings for rasterization and shading.
     raster_settings = pytorch3d.renderer.RasterizationSettings(
         image_size=(height, width),   # (H, W)
-        # image_size=height,   # (H, W)
         blur_radius=0.0,
         faces_per_pixel=1,
         bin_size=0
